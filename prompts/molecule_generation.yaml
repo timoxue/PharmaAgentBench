@@ -1,0 +1,100 @@
+# 分子生成任务 Prompt 模板
+
+system_prompt: |
+  你是一个专业的药物化学AI助手,精通分子设计和药物优化。
+  
+  你的核心能力包括:
+  1. 基于靶点的从头药物设计 (de novo drug design)
+  2. 先导化合物优化 (lead optimization)
+  3. 骨架跃迁策略 (scaffold hopping)
+  4. ADMET性质预测和优化
+  5. 合成可行性评估
+  
+  设计原则:
+  - 遵循Lipinski五规则和类药性标准
+  - 考虑合成可及性 (SA score < 6)
+  - 避免PAINS (Pan-Assay Interference Compounds)
+  - 评估毒性风险 (使用结构警报)
+  - 优化ADMET性质
+  
+  输出要求:
+  - 所有分子使用SMILES格式
+  - 提供详细的设计理由
+  - 包含关键性质预测
+  - 建议合成路线
+  - 以JSON格式返回结果
+
+user_prompt_template: |
+  ## 分子设计任务
+  
+  **目标**: {target}
+  
+  **约束条件**:
+  - 分子量: ≤ {max_mw} Da
+  - QED评分: ≥ {min_qed}
+  - 氢键供体 (HBD): ≤ 5
+  - 氢键受体 (HBA): ≤ 10
+  - LogP: -0.5 ~ 5.0
+  - 旋转键: ≤ 10
+  
+  **期望输出** (JSON格式):
+  ```json
+  {
+    "smiles": "分子的SMILES表示",
+    "iupac_name": "IUPAC命名",
+    "common_name": "常用名称",
+    "molecular_formula": "分子式",
+    "properties": {
+      "molecular_weight": 数值,
+      "logp": 数值,
+      "hbd": 整数,
+      "hba": 整数,
+      "tpsa": 数值,
+      "rotatable_bonds": 整数,
+      "aromatic_rings": 整数
+    },
+    "qed_score": 0-1之间的数值,
+    "sa_score": 1-10之间的数值(越低越易合成),
+    "design_rationale": "详细的设计思路和理由",
+    "key_features": [
+      "关键结构特征1",
+      "关键结构特征2"
+    ],
+    "predicted_activity": "预期的生物活性描述",
+    "synthesis_route": "简要合成路线建议",
+    "potential_issues": [
+      "潜在问题1",
+      "潜在问题2"
+    ]
+  }
+  ```
+  
+  请严格按照上述JSON格式返回结果。
+
+examples:
+  - target: "设计一个EGFR T790M突变体的选择性抑制剂"
+    expected_output: |
+      {
+        "smiles": "COc1cc2ncnc(Nc3ccc(F)c(Cl)c3)c2cc1OCCCN1CCOCC1",
+        "iupac_name": "N-(3-chloro-4-fluorophenyl)-7-methoxy-6-(3-morpholinopropoxy)quinazolin-4-amine",
+        "common_name": "Gefitinib analog",
+        "properties": {
+          "molecular_weight": 446.9,
+          "logp": 3.2,
+          "hbd": 1,
+          "hba": 6,
+          "tpsa": 72.4,
+          "rotatable_bonds": 7,
+          "aromatic_rings": 3
+        },
+        "qed_score": 0.68,
+        "sa_score": 3.2,
+        "design_rationale": "基于吉非替尼骨架,引入3-氯-4-氟苯基提高对T790M突变的选择性..."
+      }
+
+validation_criteria:
+  - 必须包含有效的SMILES字符串
+  - QED评分在0-1之间
+  - SA评分在1-10之间
+  - 所有数值字段必须是数字类型
+  - 分子量不超过约束条件

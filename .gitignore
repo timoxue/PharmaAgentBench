@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# 虚拟环境
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 项目特定
+# API 密钥配置 (不要提交真实密钥!)
+config/api_keys.yaml
+
+# 运行时生成文件
+runs/
+cache/
+reports/*.html
+reports/*.pdf
+
+# 日志
+*.log
+
+# 系统文件
+.DS_Store
+Thumbs.db

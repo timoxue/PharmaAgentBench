@@ -1,0 +1,24 @@
+# PharmaAgentBench 依赖包
+
+# 核心框架
+agentscope>=1.0.0
+
+# 大模型 SDK
+openai>=1.0.0                    # DeepSeek 和 Qwen (OpenAI 兼容接口)
+google-genai>=0.2.0              # Gemini 3 (新版 SDK)
+
+# 化学信息学
+rdkit>=2023.9.1                  # 分子验证和性质计算
+
+# 数据处理
+pyyaml>=6.0                      # 配置文件解析
+requests>=2.31.0                 # HTTP 请求
+
+# 可视化 (可选)
+matplotlib>=3.7.0                # 绘图
+pillow>=10.0.0                   # 图像处理
+
+# 开发工具 (可选)
+pytest>=7.4.0                    # 测试框架
+black>=23.0.0                    # 代码格式化
+flake8>=6.1.0                    # 代码检查

@@ -1,0 +1,194 @@
+# ADMET 预测任务 Prompt 模板
+
+system_prompt: |
+  你是一个专业的ADMET (吸收-分布-代谢-排泄-毒性) 预测AI助手。
+  
+  你的核心能力:
+  1. 预测口服生物利用度
+  2. 评估血脑屏障通透性
+  3. 预测CYP酶相互作用
+  4. 评估心脏毒性 (hERG抑制)
+  5. 预测肝毒性风险
+  6. 评估致突变性
+  
+  预测原则:
+  - 基于结构-性质关系 (QSPR)
+  - 参考Lipinski规则和Veber规则
+  - 考虑类药性指标 (QED, SA)
+  - 识别结构警报 (structural alerts)
+  - 提供置信度评估
+  
+  输出格式: 详细的JSON报告
+
+user_prompt_template: |
+  ## ADMET 性质预测任务
+  
+  **分子信息**: {target}
+  
+  请对该分子进行全面的ADMET分析,以JSON格式返回:
+  
+  ```json
+  {
+    "input": {
+      "smiles": "输入的SMILES",
+      "molecular_weight": 数值,
+      "logp": 数值
+    },
+    "absorption": {
+      "caco2_permeability": {
+        "prediction": "High/Medium/Low",
+        "value": "数值 (cm/s)",
+        "confidence": "high/medium/low"
+      },
+      "human_intestinal_absorption": {
+        "prediction": "Good/Moderate/Poor",
+        "percentage": "百分比",
+        "confidence": "high/medium/low"
+      },
+      "pgp_substrate": {
+        "prediction": "Yes/No",
+        "probability": 0-1之间
+      },
+      "bioavailability_score": 0-1之间,
+      "lipinski_violations": 整数,
+      "veber_violations": 整数
+    },
+    "distribution": {
+      "plasma_protein_binding": {
+        "prediction": "High/Medium/Low",
+        "percentage": "百分比"
+      },
+      "volume_of_distribution": {
+        "prediction": "数值 (L/kg)",
+        "category": "High/Medium/Low"
+      },
+      "bbb_penetration": {
+        "prediction": "Yes/No",
+        "probability": 0-1之间,
+        "mechanism": "被动扩散/主动转运"
+      }
+    },
+    "metabolism": {
+      "cyp_substrates": {
+        "CYP3A4": {"prediction": "Yes/No", "probability": 数值},
+        "CYP2D6": {"prediction": "Yes/No", "probability": 数值},
+        "CYP2C9": {"prediction": "Yes/No", "probability": 数值},
+        "CYP2C19": {"prediction": "Yes/No", "probability": 数值},
+        "CYP1A2": {"prediction": "Yes/No", "probability": 数值}
+      },
+      "cyp_inhibitors": {
+        "CYP3A4": {"prediction": "Yes/No", "probability": 数值},
+        "CYP2D6": {"prediction": "Yes/No", "probability": 数值}
+      },
+      "metabolic_stability": {
+        "prediction": "Stable/Moderate/Unstable",
+        "half_life_liver": "小时"
+      },
+      "phase2_metabolism": [
+        "可能的II相代谢途径"
+      ]
+    },
+    "excretion": {
+      "clearance": {
+        "total": "数值 (mL/min/kg)",
+        "renal": "数值 (mL/min/kg)",
+        "hepatic": "数值 (mL/min/kg)"
+      },
+      "half_life": {
+        "prediction": "数值 (hours)",
+        "category": "Short/Medium/Long"
+      },
+      "renal_excretion": {
+        "percentage": "百分比",
+        "mechanism": "肾小球滤过/主动分泌"
+      }
+    },
+    "toxicity": {
+      "hepatotoxicity": {
+        "prediction": "High/Medium/Low risk",
+        "probability": 0-1之间,
+        "structural_alerts": ["警报1", "警报2"]
+      },
+      "cardiotoxicity": {
+        "hERG_inhibition": {
+          "prediction": "Yes/No",
+          "probability": 0-1之间,
+          "risk_level": "High/Medium/Low"
+        },
+        "qt_prolongation_risk": "High/Medium/Low"
+      },
+      "mutagenicity": {
+        "ames_test": {
+          "prediction": "Positive/Negative",
+          "probability": 0-1之间
+        },
+        "structural_alerts": ["PAINS", "毒性基团等"]
+      },
+      "carcinogenicity": {
+        "prediction": "Yes/No",
+        "probability": 0-1之间
+      },
+      "acute_toxicity": {
+        "ld50_oral": {
+          "prediction": "数值 (mg/kg)",
+          "category": "I/II/III/IV"
+        },
+        "toxicity_class": "说明"
+      },
+      "skin_sensitization": {
+        "prediction": "Yes/No",
+        "probability": 0-1之间
+      }
+    },
+    "overall_assessment": {
+      "drug_likeness": {
+        "qed_score": 0-1之间,
+        "sa_score": 1-10之间
+      },
+      "developability_score": 0-100之间,
+      "risk_summary": [
+        "主要风险1",
+        "主要风险2"
+      ],
+      "optimization_suggestions": [
+        "优化建议1",
+        "优化建议2"
+      ],
+      "overall_rating": "Excellent/Good/Fair/Poor"
+    },
+    "confidence_scores": {
+      "absorption": 0-1之间,
+      "distribution": 0-1之间,
+      "metabolism": 0-1之间,
+      "excretion": 0-1之间,
+      "toxicity": 0-1之间
+    },
+    "references": [
+      "用于预测的方法学参考"
+    ]
+  }
+  ```
+
+key_parameters:
+  lipinski_rule_of_five:
+    - molecular_weight: "≤ 500 Da"
+    - logp: "≤ 5"
+    - hbd: "≤ 5"
+    - hba: "≤ 10"
+  
+  veber_rules:
+    - rotatable_bonds: "≤ 10"
+    - tpsa: "≤ 140 Å²"
+  
+  bbb_penetration:
+    - criteria: "LogP > 0, TPSA < 90 Å², MW < 400 Da"
+  
+  herg_risk:
+    - high_risk: "LogP > 4, 含碱性氮原子, 芳香环 > 3"
+
+validation_criteria:
+  - 所有概率值在0-1之间
+  - 所有评分在指定范围内
+  - 必须包含置信度评估
+  - 必须提供优化建议
+  - 结构警报必须具体说明

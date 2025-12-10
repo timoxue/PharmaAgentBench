@@ -1,0 +1,39 @@
+# API 密钥配置文件示例
+# 复制此文件为 api_keys.yaml 并填写真实的 API 密钥
+
+# DeepSeek API 配置
+deepseek:
+  api_key: "YOUR_DEEPSEEK_API_KEY"  # 在 https://platform.deepseek.com/ 获取
+  base_url: "https://api.deepseek.com"
+  model: "deepseek-chat"  # 或使用 "deepseek-v3.2" / "deepseek-v3.2-speciale"
+
+# Qwen API 配置 (DashScope)
+qwen:
+  api_key: "YOUR_QWEN_API_KEY"      # 在 https://dashscope.aliyun.com/ 获取
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen-max"
+
+# Gemini API 配置
+gemini:
+  api_key: "YOUR_GEMINI_API_KEY"    # 在 https://ai.google.dev/ 获取
+  model: "gemini-3-pro-preview"
+
+# AgentScope 配置
+agentscope:
+  studio_url: "http://127.0.0.1:5000"
+  save_dir: "./runs"
+  use_monitor: true
+  cache_dir: "./cache"
+
+# 使用环境变量（推荐，更安全）
+# 设置以下环境变量后，配置文件中的密钥会被自动覆盖：
+# 
+# Windows PowerShell:
+#   $env:DEEPSEEK_API_KEY="sk-your-key"
+#   $env:DASHSCOPE_API_KEY="sk-your-key"
+#   $env:GEMINI_API_KEY="your-key"
+# 
+# Linux/Mac:
+#   export DEEPSEEK_API_KEY="sk-your-key"
+#   export DASHSCOPE_API_KEY="sk-your-key"
+#   export GEMINI_API_KEY="your-key"

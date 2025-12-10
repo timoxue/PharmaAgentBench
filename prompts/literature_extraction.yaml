@@ -1,0 +1,102 @@
+# 文献信息提取任务 Prompt 模板
+
+system_prompt: |
+  你是一个专业的生物医学文献分析AI助手,精通药物研发文献挖掘。
+  
+  你的核心能力:
+  1. 从科学文献中提取关键药物信息
+  2. 识别和提取分子结构 (SMILES)
+  3. 提取临床试验数据和结果
+  4. 分析作用机制 (MOA)
+  5. 提取IC50、EC50等关键数值
+  
+  分析原则:
+  - 准确提取结构化数据
+  - 标注数据来源和可信度
+  - 提取定量数据 (如IC50值)
+  - 识别临床阶段和适应症
+  - 提供可验证的参考文献
+  
+  输出格式: JSON
+
+user_prompt_template: |
+  ## 文献信息提取任务
+  
+  **检索目标**: {target}
+  
+  **提取要求**:
+  
+  请从相关医药文献中提取以下信息,以JSON格式返回:
+  
+  ```json
+  {
+    "search_query": "使用的检索词",
+    "key_findings": [
+      "关键发现1",
+      "关键发现2",
+      "关键发现3"
+    ],
+    "molecules": [
+      {
+        "name": "分子名称",
+        "smiles": "SMILES表示",
+        "cas_number": "CAS号",
+        "target": "作用靶点",
+        "activity": {
+          "type": "活性类型 (IC50/EC50/Ki等)",
+          "value": "数值",
+          "unit": "单位 (nM/μM等)"
+        },
+        "mechanism": "作用机制简述"
+      }
+    ],
+    "clinical_trials": [
+      {
+        "nct_id": "NCT编号",
+        "phase": "临床阶段",
+        "indication": "适应症",
+        "status": "状态 (recruiting/completed等)",
+        "sponsor": "发起方",
+        "results_summary": "结果摘要"
+      }
+    ],
+    "key_proteins": [
+      {
+        "name": "蛋白质名称",
+        "uniprot_id": "UniProt ID",
+        "role": "在疾病中的作用"
+      }
+    ],
+    "admet_data": {
+      "bioavailability": "生物利用度信息",
+      "half_life": "半衰期",
+      "toxicity_notes": "毒性注释"
+    },
+    "references": [
+      {
+        "title": "文献标题",
+        "authors": "作者列表",
+        "journal": "期刊名",
+        "year": 年份,
+        "doi": "DOI",
+        "pmid": "PubMed ID"
+      }
+    ],
+    "extraction_confidence": "high/medium/low",
+    "notes": "其他重要说明"
+  }
+  ```
+
+examples:
+  - target: "PD-1/PD-L1抑制剂的临床数据"
+    expected_fields:
+      - molecules: ["Pembrolizumab", "Nivolumab", "Atezolizumab"]
+      - clinical_phases: ["Phase III", "Approved"]
+      - indications: ["黑色素瘤", "非小细胞肺癌", "肾细胞癌"]
+
+validation_criteria:
+  - 所有SMILES必须可验证
+  - 临床试验编号格式为NCT开头
+  - DOI和PMID必须是有效格式
+  - 活性数值必须包含单位
+  - 至少提供一个可验证的参考文献
