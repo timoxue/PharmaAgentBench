@@ -124,17 +124,30 @@ class GeminiAgent(AgentBase):
         user_prompt = self._build_user_prompt(task_type, task_config)
         
         # 调用 Gemini API
+        print(f"\n  🔍 [Gemini] 开始调用 API...")
+        print(f"  🔍 [Gemini] 任务类型: {task_type}")
+        print(f"  🔍 [Gemini] 目标描述: {target[:80]}..." if len(target) > 80 else f"  🔍 [Gemini] 目标描述: {target}")
+        print(f"  🔍 [Gemini] 模型名称: {self.model_name}")
+        
         try:
             # 优先使用 REST API，避免 SDK 的 SSL 问题
+            print(f"  🔍 [Gemini] 尝试使用 REST API...")
             try:
                 content = self._call_with_rest_api(system_prompt, user_prompt)
+                print(f"  ✅ [Gemini] REST API 调用成功")
             except Exception as rest_error:
+                print(f"  ⚠️  [Gemini] REST API 失败: {rest_error}")
                 # 如果 REST API 失败，尝试 SDK
                 if self.client is not None:
-                    print(f"  🔄 REST API 失败，尝试 SDK...")
+                    print(f"  🔄 [Gemini] 切换到 SDK 调用...")
                     content = self._call_with_sdk(system_prompt, user_prompt)
+                    print(f"  ✅ [Gemini] SDK 调用成功")
                 else:
+                    print(f"  ❌ [Gemini] SDK 未初始化，无法重试")
                     raise rest_error
+            
+            print(f"  🔍 [Gemini] 返回内容长度: {len(content)} 字符")
+            print(f"  🔍 [Gemini] 内容预览: {content[:200]}..." if len(content) > 200 else f"  🔍 [Gemini] 完整内容: {content}")
             
             # 封装结果
             result = {
@@ -152,6 +165,7 @@ class GeminiAgent(AgentBase):
             )
             
         except Exception as e:
+            print(f"  ❌ [Gemini] 调用失败: {type(e).__name__}: {str(e)}")
             error_result = {
                 'model': 'Gemini-3-Pro',
                 'task_type': task_type,
@@ -273,8 +287,12 @@ class GeminiAgent(AgentBase):
         """
         import requests
         
+        print(f"    🌐 [Gemini-REST] 准备 REST API 请求...")
+        
         api_key = self.gemini_config.get('api_key')
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model_name}:generateContent?key={api_key}"
+        
+        print(f"    🌐 [Gemini-REST] API URL: {url[:80]}...")
         
         payload = {
             "contents": [{
@@ -294,24 +312,33 @@ class GeminiAgent(AgentBase):
         
         for attempt in range(max_retries):
             try:
+                print(f"    💬 [Gemini-REST] 发送请求 (尝试 {attempt + 1}/{max_retries})...")
                 response = requests.post(url, json=payload, timeout=30)
                 response.raise_for_status()
                 
+                print(f"    ✅ [Gemini-REST] 收到响应，状态码: {response.status_code}")
+                
                 result = response.json()
-                return result['candidates'][0]['content']['parts'][0]['text']
+                print(f"    🔍 [Gemini-REST] 解析响应 JSON...")
+                
+                text = result['candidates'][0]['content']['parts'][0]['text']
+                print(f"    ✅ [Gemini-REST] 成功获取内容，长度: {len(text)}")
+                return text
                 
             except requests.exceptions.HTTPError as e:
+                print(f"    ⚠️  [Gemini-REST] HTTP 错误: {e.response.status_code} - {e.response.text[:200]}")
                 if e.response.status_code in [503, 429]:
                     if attempt < max_retries - 1:
                         delay = base_delay * (2 ** attempt)
-                        print(f"  ⚠️  Gemini API 错误 ({e.response.status_code})，{delay}秒后重试...")
+                        print(f"    ⏳ [Gemini-REST] {delay}秒后重试...")
                         time.sleep(delay)
                         continue
                 raise
             except Exception as e:
+                print(f"    ⚠️  [Gemini-REST] 请求失败: {type(e).__name__}: {str(e)}")
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
-                    print(f"  ⚠️  Gemini 连接失败，{delay}秒后重试...")
+                    print(f"    ⏳ [Gemini-REST] {delay}秒后重试...")
                     time.sleep(delay)
                     continue
                 raise

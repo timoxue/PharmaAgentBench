@@ -192,6 +192,12 @@ class ReporterAgent(AgentBase):
             audit_results
         )
         
+        # 计算综合评分并找出最优模型
+        best_model_html = self._generate_best_model_summary(
+            model_results,
+            audit_results
+        )
+        
         # 生成详细结果
         detailed_results_html = self._generate_detailed_results(
             model_results,
@@ -526,6 +532,11 @@ class ReporterAgent(AgentBase):
         <div class="section">
             <h2>🎯 多维度对比分析</h2>
             {dimensional_comparison_html}
+        </div>
+        
+        <div class="section">
+            <h2>🏆 综合评分与最优模型</h2>
+            {best_model_html}
         </div>
         
         <div class="section">
@@ -1055,4 +1066,426 @@ class ReporterAgent(AgentBase):
             """)
         
         html_parts.append('</div>')
+        return ''.join(html_parts)
+    
+    def _generate_admet_comparison(
+        self,
+        model_results: Dict[str, Any],
+        audit_results: Dict[str, Any]
+    ) -> str:
+        """生成 ADMET 预测结果对比表"""
+        # 从模型输出中提取 ADMET 相关信息
+        admet_data = {}
+        
+        for model_name in ['deepseek', 'qwen', 'gemini']:
+            result = model_results.get(model_name, {})
+            if not result.get('success'):
+                admet_data[model_name] = None
+                continue
+            
+            # 尝试从输出中解析 ADMET 数据
+            try:
+                response = result.get('response', '')
+                import re
+                json_match = re.search(r'```json\s*({[\s\S]*?})\s*```', response)
+                if not json_match:
+                    json_match = re.search(r'({[\s\S]*"smiles"[\s\S]*?})', response)
+                
+                if json_match:
+                    import json
+                    data = json.loads(json_match.group(1))
+                    
+                    # 从 properties 中提取基本理化性质
+                    props = data.get('properties', {})
+                    logp = props.get('LogP') or props.get('logp')
+                    tpsa = props.get('TPSA') or props.get('tpsa')
+                    mw = props.get('MW') or props.get('molecular_weight')
+                    hbd = props.get('HBD') or props.get('hbd')
+                    hba = props.get('HBA') or props.get('hba')
+                    
+                    # 基于理化性质推断 ADMET
+                    admet_info = {
+                        # 直接使用的理化指标
+                        'lipophilicity': logp,
+                        'permeability': tpsa,
+                        
+                        # 水溶性推断：基于 LogP
+                        'solubility': self._infer_solubility(logp),
+                        
+                        # 吸收推断：基于 TPSA 和 LogP
+                        'absorption': self._infer_absorption(tpsa, logp),
+                        
+                        # 分布推断：基于 TPSA 和分子量
+                        'distribution': self._infer_distribution(tpsa, mw),
+                        
+                        # 代谢推断：基本提示
+                        'metabolism': '未预测',
+                        
+                        # 排泄推断：基于分子量
+                        'excretion': self._infer_excretion(mw),
+                        
+                        # 毒性：从审核结果中获取
+                        'toxicity': None  # 稍后从 audit 中填充
+                    }
+                    
+                    # 尝试从模型输出中直接获取 ADMET 字段（如果有）
+                    if 'admet' in data:
+                        admet_raw = data['admet']
+                        if 'absorption' in admet_raw:
+                            admet_info['absorption'] = admet_raw['absorption']
+                        if 'distribution' in admet_raw:
+                            admet_info['distribution'] = admet_raw['distribution']
+                        if 'metabolism' in admet_raw:
+                            admet_info['metabolism'] = admet_raw['metabolism']
+                        if 'excretion' in admet_raw:
+                            admet_info['excretion'] = admet_raw['excretion']
+                        if 'toxicity' in admet_raw:
+                            admet_info['toxicity'] = admet_raw['toxicity']
+                    
+                    admet_data[model_name] = admet_info
+                else:
+                    admet_data[model_name] = None
+            except:
+                admet_data[model_name] = None
+        
+        # 从审核结果中填充毒性信息
+        audit_data_dict = audit_results.get('audit_results', {})
+        for model_name in ['deepseek', 'qwen', 'gemini']:
+            if admet_data.get(model_name) and admet_data[model_name].get('toxicity') is None:
+                audit = audit_data_dict.get(model_name, {})
+                tox_check = audit.get('checks', {}).get('toxicity', {})
+                alerts = tox_check.get('alerts', [])
+                if len(alerts) == 0:
+                    admet_data[model_name]['toxicity'] = '无警报'
+                elif len(alerts) == 1:
+                    admet_data[model_name]['toxicity'] = f'1个警报'
+                else:
+                    admet_data[model_name]['toxicity'] = f'{len(alerts)}个警报'
+        
+        # 生成 HTML 表格
+        html_parts = []
+        html_parts.append('''
+        <div class="analysis-box">
+            <h4>🔬 ADMET 分析说明</h4>
+            <p>ADMET (吸收-分布-代谢-排泄-毒性) 是评估药物候选分子成药性的关键指标。</p>
+            <p><strong>数据来源</strong>：亲脂性、通透性直接来自模型输出的理化性质；其他 ADMET 维度基于 LogP、TPSA、分子量等指标进行经验性推断。</p>
+            <p style="color: #666; font-size: 0.9em;"><em>注：若模型输出中包含专门的 ADMET 预测字段，将优先使用该数据。</em></p>
+        </div>
+        
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>ADMET 维度</th>
+                    <th>DeepSeek</th>
+                    <th>Qwen</th>
+                    <th>Gemini</th>
+                    <th>最优</th>
+                </tr>
+            </thead>
+            <tbody>
+        ''')
+        
+        # ADMET 维度
+        admet_metrics = [
+            ('lipophilicity', '亲脂性 (LogP)', 'number', (2.0, 4.0)),
+            ('solubility', '水溶性 (LogS)', 'text', None),
+            ('permeability', '通透性 (TPSA Å²)', 'number', (0, 140)),
+            ('absorption', '吸收', 'text', None),
+            ('distribution', '分布', 'text', None),
+            ('metabolism', '代谢', 'text', None),
+            ('excretion', '排泄', 'text', None),
+            ('toxicity', '毒性', 'text', None),
+        ]
+        
+        for metric_key, metric_name, metric_type, optimal_range in admet_metrics:
+            row_values = {}
+            for model_name in ['deepseek', 'qwen', 'gemini']:
+                data = admet_data.get(model_name)
+                if data and metric_key in data and data[metric_key] is not None:
+                    row_values[model_name] = data[metric_key]
+                else:
+                    row_values[model_name] = 'N/A'
+            
+            # 确定最优值
+            best_model = None
+            if metric_type == 'number' and optimal_range:
+                numeric_values = {}
+                for model, val in row_values.items():
+                    if val != 'N/A':
+                        try:
+                            numeric_values[model] = float(val)
+                        except:
+                            pass
+                
+                if numeric_values:
+                    # 找到最接近优化范围中心的值
+                    target = (optimal_range[0] + optimal_range[1]) / 2
+                    best_model = min(numeric_values, key=lambda k: abs(numeric_values[k] - target))
+            
+            # 生成表格行
+            cells = [f"<td><strong>{metric_name}</strong></td>"]
+            for model_name in ['deepseek', 'qwen', 'gemini']:
+                value = row_values[model_name]
+                css_class = 'metric-best' if model_name == best_model else ''
+                
+                if metric_type == 'number' and value != 'N/A':
+                    try:
+                        value = f"{float(value):.2f}"
+                    except:
+                        pass
+                
+                cells.append(f'<td class="{css_class}">{value}</td>')
+            
+            best_label = best_model.upper() if best_model else '-'
+            cells.append(f'<td>{best_label}</td>')
+            html_parts.append(f"<tr>{''.join(cells)}</tr>")
+        
+        html_parts.append('''
+            </tbody>
+        </table>
+        ''')
+        
+        return ''.join(html_parts)
+    
+    def _infer_solubility(self, logp) -> str:
+        """基于 LogP 推断水溶性"""
+        if logp is None:
+            return '未知'
+        try:
+            logp_val = float(logp)
+            if logp_val < 1:
+                return '良好 (LogP<1)'
+            elif logp_val < 3:
+                return '中等 (LogP 1-3)'
+            elif logp_val < 5:
+                return '较差 (LogP 3-5)'
+            else:
+                return '很差 (LogP>5)'
+        except:
+            return '未知'
+    
+    def _infer_absorption(self, tpsa, logp) -> str:
+        """基于 TPSA 和 LogP 推断口服吸收"""
+        if tpsa is None:
+            return '未知'
+        try:
+            tpsa_val = float(tpsa)
+            # 经验法则：TPSA < 140 且 LogP 2-4 吸收较好
+            if tpsa_val < 60:
+                absorption_level = '高'
+            elif tpsa_val < 90:
+                absorption_level = '中等'
+            elif tpsa_val < 140:
+                absorption_level = '一般'
+            else:
+                absorption_level = '差'
+            
+            # 结合 LogP 信息
+            if logp is not None:
+                try:
+                    logp_val = float(logp)
+                    if 2 <= logp_val <= 4 and tpsa_val < 140:
+                        return f'{absorption_level} (TPSA={tpsa_val:.1f})'
+                except:
+                    pass
+            
+            return f'{absorption_level} (TPSA={tpsa_val:.1f})'
+        except:
+            return '未知'
+    
+    def _infer_distribution(self, tpsa, mw) -> str:
+        """基于 TPSA 和分子量推断分布特性"""
+        if tpsa is None and mw is None:
+            return '未知'
+        
+        result_parts = []
+        
+        # BBB 通透性：TPSA < 90 且 MW < 450
+        if tpsa is not None:
+            try:
+                tpsa_val = float(tpsa)
+                if tpsa_val < 90:
+                    result_parts.append('BBB+')
+                else:
+                    result_parts.append('BBB-')
+            except:
+                pass
+        
+        # 基于分子量
+        if mw is not None:
+            try:
+                mw_val = float(mw)
+                if mw_val < 400:
+                    result_parts.append('小分子')
+                elif mw_val < 500:
+                    result_parts.append('中等大小')
+                else:
+                    result_parts.append('大分子')
+            except:
+                pass
+        
+        return ', '.join(result_parts) if result_parts else '未知'
+    
+    def _infer_excretion(self, mw) -> str:
+        """基于分子量推断排泄特性"""
+        if mw is None:
+            return '未知'
+        try:
+            mw_val = float(mw)
+            # 小分子更容易经肾清除
+            if mw_val < 300:
+                return '快速 (肾清除)'
+            elif mw_val < 500:
+                return '中等'
+            else:
+                return '缓慢 (胆汁排泄)'
+        except:
+            return '未知'
+    
+    def _extract_admet_value(self, data: dict, keys: list) -> Any:
+        """从数据中提取 ADMET 相关值（尝试多个别名）"""
+        # 先在顶层找
+        for key in keys:
+            if key in data:
+                return data[key]
+        
+        # 再在 properties 中找
+        props = data.get('properties', {})
+        for key in keys:
+            if key in props:
+                return props[key]
+        
+        # 在 admet 字段中找
+        admet = data.get('admet', {})
+        for key in keys:
+            if key in admet:
+                return admet[key]
+        
+        return None
+    
+    def _generate_best_model_summary(
+        self,
+        model_results: Dict[str, Any],
+        audit_results: Dict[str, Any]
+    ) -> str:
+        """生成综合评分和最优模型总结"""
+        scores = {}
+        
+        for model_name in ['deepseek', 'qwen', 'gemini']:
+            score_details = {
+                'call_success': 0,
+                'chemistry': 0,
+                'druglikeness': 0,
+                'toxicity': 0,
+                'total': 0
+            }
+            
+            # 1. 调用成功 (25分)
+            result = model_results.get(model_name, {})
+            if result.get('success'):
+                score_details['call_success'] = 25
+            
+            # 其他维度需要审核结果
+            audit = audit_results.get('audit_results', {}).get(model_name, {})
+            checks = audit.get('checks', {})
+            
+            # 2. 化学合法性 (25分)
+            chem_check = checks.get('chemistry', {})
+            if chem_check.get('valid'):
+                score_details['chemistry'] = 25
+            
+            # 3. 类药性 (25分)
+            drug_check = checks.get('druglikeness', {})
+            if drug_check:
+                lipinski_violations = drug_check.get('lipinski_violations', 5)
+                qed = drug_check.get('qed', 0)
+                # 基于 Lipinski 和 QED 的综合评分
+                lipinski_score = max(0, (5 - lipinski_violations) / 5 * 15)
+                qed_score = qed * 10 if qed else 0
+                score_details['druglikeness'] = min(25, lipinski_score + qed_score)
+            
+            # 4. 毒性风险 (25分)
+            tox_check = checks.get('toxicity', {})
+            if tox_check:
+                alerts = len(tox_check.get('alerts', []))
+                # 无毒性警报 = 25分，每个警报扣 8 分
+                score_details['toxicity'] = max(0, 25 - alerts * 8)
+            
+            # 总分
+            score_details['total'] = sum([
+                score_details['call_success'],
+                score_details['chemistry'],
+                score_details['druglikeness'],
+                score_details['toxicity']
+            ])
+            
+            scores[model_name] = score_details
+        
+        # 找出最优模型
+        best_model = max(scores.items(), key=lambda x: x[1]['total'])
+        best_name = best_model[0]
+        best_score = best_model[1]['total']
+        
+        # 生成 HTML
+        html_parts = []
+        
+        # 评分对比表
+        html_parts.append('''
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>模型</th>
+                    <th>调用成功 (25分)</th>
+                    <th>化学合法性 (25分)</th>
+                    <th>类药性 (25分)</th>
+                    <th>毒性风险 (25分)</th>
+                    <th>总分 (100分)</th>
+                </tr>
+            </thead>
+            <tbody>
+        ''')
+        
+        for model_name in ['deepseek', 'qwen', 'gemini']:
+            score = scores[model_name]
+            is_best = (model_name == best_name)
+            row_class = 'style="background: #d4edda; font-weight: bold;"' if is_best else ''
+            
+            html_parts.append(f'''
+                <tr {row_class}>
+                    <td><strong>{model_name.upper()}</strong>{'  🏆' if is_best else ''}</td>
+                    <td>{score['call_success']:.1f}</td>
+                    <td>{score['chemistry']:.1f}</td>
+                    <td>{score['druglikeness']:.1f}</td>
+                    <td>{score['toxicity']:.1f}</td>
+                    <td><strong>{score['total']:.1f}</strong></td>
+                </tr>
+            ''')
+        
+        html_parts.append('''
+            </tbody>
+        </table>
+        ''')
+        
+        # 最优模型提示框
+        html_parts.append(f'''
+        <div class="analysis-box" style="margin-top: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none;">
+            <h3 style="color: white; font-size: 1.5em; margin-bottom: 15px;">🏆 最优模型：{best_name.upper()}</h3>
+            <p style="font-size: 1.2em; margin-bottom: 10px;">综合评分：<strong style="font-size: 1.5em;">{best_score:.1f}</strong> / 100 分</p>
+            <p style="opacity: 0.95;">基于调用成功率、化学合法性、类药性和毒性风险四个维度的综合评估，<strong>{best_name.upper()}</strong> 在本次评测中表现最佳。</p>
+        </div>
+        
+        <div class="analysis-box" style="margin-top: 20px;">
+            <h4>📊 评分维度说明</h4>
+            <ul>
+                <li><strong>调用成功 (25分)</strong>：API 调用是否成功返回结果</li>
+                <li><strong>化学合法性 (25分)</strong>：SMILES 结构是否可解析且合法</li>
+                <li><strong>类药性 (25分)</strong>：Lipinski 规则符合度 + QED 评分（0-1）</li>
+                <li><strong>毒性风险 (25分)</strong>：结构毒性警报数量（越少越好）</li>
+            </ul>
+            <p style="margin-top: 15px; color: #666; font-size: 0.95em;">
+                <strong>注意</strong>：该评分仅供参考，实际应用中需结合具体任务场景、靠点需求、合成可行性等因素综合判断。
+            </p>
+        </div>
+        ''')
+        
         return ''.join(html_parts)
